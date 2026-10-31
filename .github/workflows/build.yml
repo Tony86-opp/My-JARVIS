@@ -1,3 +1,4 @@
+
 name: Build JARVIS APK
 
 on:
@@ -22,26 +23,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android licenses and install SDK
+      - name: Install Android SDK
         run: |
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
           echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Extract JARVIS project
-        run: unzip -q JARVIS_Android_Starter.zip -d extracted
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Build APK
-        run: gradle -p extracted/JARVIS_Android_Starter assembleDebug
+      - name: Build JARVIS
+        run: gradle -p jarvis-app assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: JARVIS-APK
-          path: extracted/JARVIS_Android_Starter/app/build/outputs/apk/debug/app-debug.apk
+          path: jarvis-app/app/build/outputs/apk/debug/app-debug.apk
+          
