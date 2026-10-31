@@ -149,17 +149,17 @@ private String loadApiKey() {
         });
 
         buildInterface();
-        addMessage("JARVIS", "Systems online. Good evening. How may I assist you?");
-        apiKey = loadApiKey();
+addMessage("JARVIS", "Systems online. Good evening. How may I assist you?");
+
+apiKey = loadApiKey();
 
 if (apiKey.isEmpty()) {
     showKeyDialog();
-
-
 } else {
     status.setText("● READY • SAVED AI KEY");
     status.setTextColor(GOLD);
 }
+    }
 
     private GradientDrawable shape(int color, int strokeColor) {
         GradientDrawable drawable = new GradientDrawable();
