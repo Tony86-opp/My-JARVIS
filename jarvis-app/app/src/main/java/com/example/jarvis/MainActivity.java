@@ -1,179 +1,353 @@
-
 package com.example.jarvis;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.RecognitionListener;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
-import android.widget.*;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.io.*;
-import java.util.*;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
 
-    TextView status, conversation;
-    EditText message;
-    TextToSpeech tts;
-    SpeechRecognizer recognizer;
-    String apiKey = "";
-    ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final int BG = Color.rgb(8, 10, 18);
+    private final int PANEL = Color.rgb(19, 23, 35);
+    private final int RED = Color.rgb(255, 65, 55);
+    private final int GOLD = Color.rgb(255, 190, 75);
+    private final int WHITE = Color.rgb(240, 243, 250);
+    private final int MUTED = Color.rgb(150, 160, 180);
+
+    private LinearLayout root;
+    private LinearLayout chat;
+    private EditText input;
+    private TextView status;
+    private TextView reactor;
+    private ScrollView scroll;
+
+    private TextToSpeech tts;
+    private SpeechRecognizer recognizer;
+    private ExecutorService executor;
+
+    private String apiKey = "";
+    private boolean ttsReady = false;
 
     @Override
-    public void onCreate(Bundle b) {
-        super.onCreate(b);
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(Color.rgb(4,12,24));
-        getWindow().setNavigationBarColor(Color.rgb(4,12,24));
+        executor = Executors.newSingleThreadExecutor();
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(1);
-        root.setPadding(22,25,22,20);
-        root.setBackgroundColor(Color.rgb(4,12,24));
+        tts = new TextToSpeech(this, result -> {
+            if (result == TextToSpeech.SUCCESS) {
+                int languageResult = tts.setLanguage(Locale.UK);
+                ttsReady = languageResult != TextToSpeech.LANG_MISSING_DATA
+                        && languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
 
-        TextView title = new TextView(this);
-        title.setText("J.A.R.V.I.S.");
-        title.setTextSize(32);
-        title.setTextColor(Color.CYAN);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title);
+                if (ttsReady) {
+                    tts.setSpeechRate(0.88f);
+                    tts.setPitch(0.82f);
+                }
+            }
+        });
 
-        status = new TextView(this);
-        status.setText("SYSTEM READY");
-        status.setTextColor(Color.CYAN);
-        status.setGravity(Gravity.CENTER);
-        root.addView(status);
+        buildInterface();
+        addMessage("JARVIS", "Systems online. Good evening. How may I assist you?");
+        showKeyDialog();
+    }
 
-        conversation = new TextView(this);
-        conversation.setTextColor(Color.WHITE);
-        conversation.setTextSize(17);
-        conversation.setPadding(12,20,12,20);
-        conversation.setText("Hello! I am JARVIS.");
+    private GradientDrawable shape(int color, int strokeColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(16));
+        drawable.setStroke(dp(1), strokeColor);
+        return drawable;
+    }
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(conversation);
-        root.addView(scroll,
-            new LinearLayout.LayoutParams(-1,0,1));
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density);
+    }
 
-        message = new EditText(this);
-        message.setHint("Type your message");
-        message.setTextColor(Color.WHITE);
-        message.setHintTextColor(Color.GRAY);
-        root.addView(message);
+    private TextView text(String value, int size, int color) {
+        TextView view = new TextView(this);
+        view.setText(value);
+        view.setTextSize(size);
+        view.setTextColor(color);
+        view.setGravity(Gravity.CENTER);
+        return view;
+    }
 
-        Button send = new Button(this);
-        send.setText("SEND");
-        send.setOnClickListener(v -> sendMessage());
-        root.addView(send);
+    private Button makeButton(String label, int color) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextColor(WHITE);
+        button.setTextSize(13);
+        button.setAllCaps(false);
+        button.setTypeface(Typeface.DEFAULT_BOLD);
+        button.setBackground(shape(PANEL, color));
+        return button;
+    }
 
-        Button talk = new Button(this);
-        talk.setText("TALK TO JARVIS");
-        talk.setOnClickListener(v -> startListening());
-        root.addView(talk);
+    private void buildInterface() {
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18), dp(16), dp(18), dp(12));
+        root.setBackgroundColor(BG);
 
-        Button key = new Button(this);
-        key.setText("CONNECT GROQ AI");
-        key.setOnClickListener(v -> showKeyDialog());
-        root.addView(key);
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setGravity(Gravity.CENTER);
+        header.setPadding(0, dp(8), 0, dp(8));
 
-        TextView safety = new TextView(this);
-        safety.setText("NO BANKING • NO PAYMENTS • NO TRANSFERS");
-        safety.setTextColor(Color.rgb(255,160,130));
-        safety.setGravity(Gravity.CENTER);
+        TextView eyebrow = text("STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
+        header.addView(eyebrow);
+
+        TextView title = text("J.A.R.V.I.S.", 32, WHITE);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setLetterSpacing(0.12f);
+        header.addView(title);
+
+        TextView subtitle = text("JUST A RATHER VERY INTELLIGENT SYSTEM", 9, MUTED);
+        header.addView(subtitle);
+
+        root.addView(header);
+
+        LinearLayout corePanel = new LinearLayout(this);
+        corePanel.setOrientation(LinearLayout.VERTICAL);
+        corePanel.setGravity(Gravity.CENTER);
+        corePanel.setPadding(dp(12), dp(14), dp(12), dp(14));
+        corePanel.setBackground(shape(PANEL, RED));
+
+        reactor = text("◉", 64, RED);
+        reactor.setTypeface(Typeface.DEFAULT_BOLD);
+        corePanel.addView(reactor);
+
+        TextView coreLabel = text("ARC REACTOR  //  CORE SYSTEM", 10, GOLD);
+        corePanel.addView(coreLabel);
+
+        status = text("●  STANDBY  •  AI NOT CONNECTED", 11, MUTED);
+        status.setPadding(0, dp(8), 0, 0);
+        corePanel.addView(status);
+
+        LinearLayout.LayoutParams coreParams =
+                new LinearLayout.LayoutParams(-1, dp(150));
+        coreParams.bottomMargin = dp(12);
+        root.addView(corePanel, coreParams);
+
+        TextView logTitle = text("COMMUNICATION LOG", 11, GOLD);
+        logTitle.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        logTitle.setPadding(dp(4), dp(4), 0, dp(8));
+        root.addView(logTitle);
+
+        scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+
+        chat = new LinearLayout(this);
+        chat.setOrientation(LinearLayout.VERTICAL);
+        chat.setPadding(dp(2), dp(4), dp(2), dp(8));
+
+        scroll.addView(chat);
+
+        LinearLayout.LayoutParams scrollParams =
+                new LinearLayout.LayoutParams(-1, 0, 1f);
+        root.addView(scroll, scrollParams);
+
+        input = new EditText(this);
+        input.setSingleLine(false);
+        input.setMinLines(1);
+        input.setMaxLines(3);
+        input.setTextColor(WHITE);
+        input.setHintTextColor(MUTED);
+        input.setHint("Ask JARVIS anything...");
+        input.setTextSize(15);
+        input.setPadding(dp(14), dp(12), dp(14), dp(12));
+        input.setBackground(shape(PANEL, Color.rgb(65, 75, 95)));
+
+        LinearLayout.LayoutParams inputParams =
+                new LinearLayout.LayoutParams(-1, -2);
+        inputParams.topMargin = dp(10);
+        root.addView(input, inputParams);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button send = makeButton("SEND", RED);
+        Button talk = makeButton("🎙 TALK", GOLD);
+        Button connect = makeButton("AI KEY", GOLD);
+
+        row.addView(send, new LinearLayout.LayoutParams(0, dp(52), 1f));
+
+        LinearLayout.LayoutParams talkParams =
+                new LinearLayout.LayoutParams(0, dp(52), 1f);
+        talkParams.leftMargin = dp(6);
+        row.addView(talk, talkParams);
+
+        LinearLayout.LayoutParams connectParams =
+                new LinearLayout.LayoutParams(0, dp(52), 1f);
+        connectParams.leftMargin = dp(6);
+        row.addView(connect, connectParams);
+
+        root.addView(row);
+
+        TextView safety = text(
+                "SECURE MODE  •  BANKING AND PAYMENTS DISABLED",
+                9, MUTED);
+        safety.setPadding(0, dp(10), 0, dp(2));
         root.addView(safety);
 
         setContentView(root);
 
-        tts = new TextToSpeech(this, result -> {
-            if (result == TextToSpeech.SUCCESS) {
-                tts.setLanguage(Locale.getDefault());
+        send.setOnClickListener(v -> {
+            String question = input.getText().toString().trim();
+            if (!question.isEmpty()) {
+                input.setText("");
+                hideKeyboard();
+                sendMessage(question);
             }
         });
 
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+        talk.setOnClickListener(v -> startListening());
+        connect.setOnClickListener(v -> showKeyDialog());
+    }
+
+    private void hideKeyboard() {
+        try {
+            InputMethodManager manager =
+                    (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (manager != null) {
+                manager.hideSoftInputFromWindow(input.getWindowToken(), 0);
+            }
+        } catch (Exception ignored) {
         }
     }
 
-    void showKeyDialog() {
-        EditText input = new EditText(this);
-        input.setHint("Paste your Groq API key");
-        input.setSingleLine(true);
+    private void addMessage(String who, String message) {
+        TextView bubble = new TextView(this);
+        bubble.setText(who + "\n" + message);
+        bubble.setTextSize(14);
+        bubble.setTextColor(WHITE);
+        bubble.setGravity(Gravity.START);
+        bubble.setPadding(dp(13), dp(10), dp(13), dp(10));
+        bubble.setBackground(shape(
+                who.equals("YOU")
+                        ? Color.rgb(35, 24, 29)
+                        : Color.rgb(18, 27, 39),
+                who.equals("YOU") ? RED : GOLD));
+
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(-1, -2);
+        params.bottomMargin = dp(9);
+        chat.addView(bubble, params);
+
+        scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+    }
+
+    private void showKeyDialog() {
+        EditText keyInput = new EditText(this);
+        keyInput.setSingleLine(true);
+        keyInput.setHint("Paste your Groq API key");
+        keyInput.setInputType(129);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setPadding(dp(20), dp(8), dp(20), dp(4));
+        box.addView(keyInput, new LinearLayout.LayoutParams(-1, -2));
 
         new AlertDialog.Builder(this)
-            .setTitle("Connect Groq AI")
-            .setMessage("Your key stays in memory until the app closes.")
-            .setView(input)
-            .setPositiveButton("SAVE", (d,w) -> {
-                apiKey = input.getText().toString().trim();
-                status.setText(apiKey.isEmpty()
-                    ? "API KEY NOT SET" : "AI KEY ADDED");
-            })
-            .setNegativeButton("CANCEL", null)
-            .show();
+                .setTitle("Connect JARVIS AI")
+                .setMessage("Enter your Groq API key. It will remain in memory only.")
+                .setView(box)
+                .setCancelable(true)
+                .setPositiveButton("CONNECT", (dialog, which) -> {
+                    String entered = keyInput.getText().toString().trim();
+
+                    if (entered.isEmpty()) {
+                        Toast.makeText(this,
+                                "No API key entered.", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    apiKey = entered;
+                    status.setText("●  READY  •  AI KEY ADDED");
+                    status.setTextColor(GOLD);
+                    addMessage("JARVIS",
+                            "API key entered. I will test the connection when you send a message.");
+                })
+                .setNegativeButton("LATER", (dialog, which) -> {
+                    status.setText("●  OFFLINE MODE  •  AI NOT CONNECTED");
+                })
+                .show();
     }
 
-    void sendMessage() {
-        String question = message.getText().toString().trim();
-        if (question.isEmpty()) return;
+    private void sendMessage(String question) {
+        addMessage("YOU", question);
 
-        conversation.append("\n\nYOU: " + question);
-        message.setText("");
+        String lower = question.toLowerCase(Locale.ROOT);
 
-        String q = question.toLowerCase(Locale.ROOT);
-
-        if (q.contains("bank") || q.contains("payment")
-                || q.contains("transfer")) {
-            reply("I cannot perform banking, payments or transfers.");
+        if (lower.matches(".*\\b(bank|banking|payment|payments|money transfer|transfer money|upi|pay someone)\\b.*")) {
+            reply("That capability is disabled, as requested. I cannot help perform banking, payments, or money transfers.");
             return;
         }
 
-        if (q.contains("time")) {
-            reply("The time is " +
-                new java.text.SimpleDateFormat("hh:mm a",
-                Locale.getDefault()).format(new Date()));
+        if (lower.contains("what time") || lower.equals("time")) {
+            reply("The current time is " +
+                    java.text.DateFormat.getTimeInstance(
+                            java.text.DateFormat.SHORT).format(new java.util.Date()));
             return;
         }
 
-        if (q.contains("date")) {
+        if (lower.contains("what date") || lower.contains("today's date")) {
             reply("Today's date is " +
-                new java.text.SimpleDateFormat("dd MMMM yyyy",
-                Locale.getDefault()).format(new Date()));
+                    java.text.DateFormat.getDateInstance(
+                            java.text.DateFormat.LONG).format(new java.util.Date()));
             return;
         }
 
         if (apiKey.isEmpty()) {
-            reply("Please connect Groq AI first. Offline mode is limited.");
+            reply("My AI connection is not configured yet. Tap AI KEY and enter your Groq API key.");
             return;
         }
 
-        status.setText("THINKING...");
+        status.setText("●  THINKING  •  CONNECTING TO GROQ");
+        status.setTextColor(GOLD);
+        reactor.setTextColor(GOLD);
+
         executor.execute(() -> askGroq(question));
     }
 
-    void askGroq(String question) {
+    private void askGroq(String question) {
         HttpURLConnection conn = null;
 
         try {
             URL url = new URL(
-                "https://api.groq.com/openai/v1/chat/completions");
+                    "https://api.groq.com/openai/v1/chat/completions");
 
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -181,24 +355,23 @@ public class MainActivity extends Activity {
             conn.setReadTimeout(30000);
             conn.setDoOutput(true);
 
-            conn.setRequestProperty("Content-Type",
-                "application/json");
-            conn.setRequestProperty("Authorization",
-                "Bearer " + apiKey);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
 
             JSONObject body = new JSONObject();
             body.put("model", "llama-3.3-70b-versatile");
+            body.put("temperature", 0.7);
+            body.put("max_tokens", 500);
 
             JSONArray messages = new JSONArray();
 
             JSONObject system = new JSONObject();
             system.put("role", "system");
             system.put("content",
-                "You are JARVIS, a helpful voice assistant. " +
-                "Reply in the same language as the user. " +
-                "Use simple, clear language. " +
-                "Never perform banking, payments or money transfers.");
-
+                    "You are JARVIS, a helpful, calm, intelligent voice assistant. " +
+                    "Reply in the same language as the user. " +
+                    "Use clear, natural, concise language. " +
+                    "Never perform or facilitate banking, payments, or money transfers.");
             messages.put(system);
 
             JSONObject user = new JSONObject();
@@ -208,46 +381,63 @@ public class MainActivity extends Activity {
 
             body.put("messages", messages);
 
-            OutputStream out = conn.getOutputStream();
-            out.write(body.toString().getBytes("UTF-8"));
-            out.close();
+            byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+
+            try (OutputStream out = conn.getOutputStream()) {
+                out.write(bytes);
+            }
 
             int code = conn.getResponseCode();
 
             InputStream stream = (code >= 200 && code < 300)
-                ? conn.getInputStream()
-                : conn.getErrorStream();
-
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(stream, "UTF-8"));
+                    ? conn.getInputStream()
+                    : conn.getErrorStream();
 
             StringBuilder result = new StringBuilder();
-            String line;
 
-            while ((line = reader.readLine()) != null) {
-                result.append(line);
+            if (stream != null) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        result.append(line);
+                    }
+                }
             }
 
-            reader.close();
-
             if (code < 200 || code >= 300) {
-                throw new Exception("Groq error " + code + ": " + result
+                throw new Exception("Groq error " + code + ": " + result);
+            }
 
-            JSONObject response =
-                new JSONObject(result.toString());
+            JSONObject response = new JSONObject(result.toString());
 
             String answer = response.getJSONArray("choices")
-                .getJSONObject(0)
-                .getJSONObject("message")
-                .getString("content");
+                    .getJSONObject(0)
+                    .getJSONObject("message")
+                    .getString("content");
 
-            runOnUiThread(() -> reply(answer));
+            runOnUiThread(() -> {
+                status.setText("●  ONLINE  •  JARVIS READY");
+                status.setTextColor(GOLD);
+                reactor.setTextColor(RED);
+                reply(answer);
+            });
 
-                } catch (Exception e) {
+        } catch (Exception e) {
             String error = e.getMessage();
-            runOnUiThread(() ->
-                reply("AI connection failed: " +
-                    (error == null ? "Unknown error" : error)));
+            if (error == null || error.isEmpty()) {
+                error = e.getClass().getSimpleName();
+            }
+
+            final String message = error;
+
+            runOnUiThread(() -> {
+                status.setText("●  CONNECTION ERROR");
+                status.setTextColor(RED);
+                reactor.setTextColor(RED);
+                reply("AI connection failed: " + message);
+            });
+
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -255,100 +445,118 @@ public class MainActivity extends Activity {
         }
     }
 
-    void reply(String answer) {
-        conversation.append("\n\nJARVIS: " + answer);
-        status.setText("SYSTEM READY");
+    private void reply(String answer) {
+        addMessage("JARVIS", answer);
 
-        if (tts != null) {
-            tts.speak(answer, TextToSpeech.QUEUE_FLUSH,
-                null, "jarvis");
+        if (tts != null && ttsReady) {
+            tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "JARVIS_REPLY");
         }
     }
 
-    void startListening() {
+    private void startListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            reply("Speech recognition is not available on this phone.");
+            Toast.makeText(this,
+                    "Speech recognition is not available on this device.",
+                    Toast.LENGTH_LONG).show();
             return;
         }
 
-        if (recognizer != null) {
-            recognizer.destroy();
-        }
-
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-
-        recognizer.setRecognitionListener(new RecognitionListener() {
-
-            @Override
-            public void onReadyForSpeech(Bundle params) {
-                status.setText("LISTENING...");
+        try {
+            if (recognizer != null) {
+                recognizer.destroy();
             }
 
-            @Override
-            public void onBeginningOfSpeech() {}
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
 
-            @Override
-            public void onRmsChanged(float rmsdB) {}
-
-            @Override
-            public void onBufferReceived(byte[] buffer) {}
-
-            @Override
-            public void onEndOfSpeech() {
-                status.setText("PROCESSING...");
-            }
-
-            @Override
-            public void onError(int error) {
-                status.setText("SYSTEM READY");
-                reply("I could not hear you. Please try again.");
-            }
-
-            @Override
-            public void onResults(Bundle results) {
-                ArrayList<String> words = results.getStringArrayList(
-                    SpeechRecognizer.RESULTS_RECOGNITION);
-
-                if (words != null && !words.isEmpty()) {
-                    message.setText(words.get(0));
-                    sendMessage();
+            recognizer.setRecognitionListener(new RecognitionListener() {
+                @Override
+                public void onReadyForSpeech(Bundle params) {
+                    status.setText("●  LISTENING  •  SPEAK NOW");
+                    status.setTextColor(GOLD);
                 }
 
-                status.setText("SYSTEM READY");
-            }
+                @Override
+                public void onBeginningOfSpeech() {
+                }
 
-            @Override
-            public void onPartialResults(Bundle partialResults) {}
+                @Override
+                public void onRmsChanged(float rmsdB) {
+                }
 
-            @Override
-            public void onEvent(int eventType, Bundle params) {}
-        });
+                @Override
+                public void onBufferReceived(byte[] buffer) {
+                }
 
-        Intent intent = new Intent(
-            RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                @Override
+                public void onEndOfSpeech() {
+                    status.setText("●  PROCESSING VOICE");
+                }
 
-        intent.putExtra(
-            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                @Override
+                public void onError(int error) {
+                    status.setText("●  STANDBY");
+                    Toast.makeText(MainActivity.this,
+                            "Couldn't recognize speech. Please try again.",
+                            Toast.LENGTH_SHORT).show();
+                }
 
-        intent.putExtra(
-            RecognizerIntent.EXTRA_LANGUAGE,
-            Locale.getDefault().toLanguageTag());
+                @Override
+                public void onResults(Bundle results) {
+                    ArrayList<String> matches =
+                            results.getStringArrayList(
+                                    SpeechRecognizer.RESULTS_RECOGNITION);
 
-        recognizer.startListening(intent);
+                    status.setText("●  STANDBY");
+
+                    if (matches != null && !matches.isEmpty()) {
+                        input.setText(matches.get(0));
+                        sendMessage(matches.get(0));
+                        input.setText("");
+                    }
+                }
+
+                @Override
+                public void onPartialResults(Bundle partialResults) {
+                }
+
+                @Override
+                public void onEvent(int eventType, Bundle params) {
+                }
+            });
+
+            Intent intent = new Intent(
+                    RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+
+            recognizer.startListening(intent);
+
+        } catch (Exception e) {
+            Toast.makeText(this,
+                    "Voice input failed: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
     protected void onDestroy() {
         if (recognizer != null) {
             recognizer.destroy();
+            recognizer = null;
         }
 
         if (tts != null) {
+            tts.stop();
             tts.shutdown();
+            tts = null;
         }
 
-        executor.shutdownNow();
+        if (executor != null) {
+            executor.shutdownNow();
+        }
+
         super.onDestroy();
     }
-    }
+                }
