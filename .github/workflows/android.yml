@@ -22,15 +22,22 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
+
       - name: Install Android SDK packages
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Extract JARVIS project
         run: unzip -q JARVIS_Android_Starter.zip -d extracted
 
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
       - name: Build APK
-        run: |
-          gradle -p extracted/JARVIS_Android_Starter assembleDebug
+        run: gradle -p extracted/JARVIS_Android_Starter assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
