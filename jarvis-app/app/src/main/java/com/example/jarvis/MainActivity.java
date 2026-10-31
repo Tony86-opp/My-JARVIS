@@ -37,7 +37,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity { 
 
     private final int BG = Color.rgb(8, 10, 18);
     private final int PANEL = Color.rgb(19, 23, 35);
