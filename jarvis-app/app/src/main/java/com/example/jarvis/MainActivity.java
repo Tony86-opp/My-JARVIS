@@ -36,9 +36,78 @@ import java.util.ArrayList;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
+import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 public class MainActivity extends Activity { 
+private static final String KEY_ALIAS = "JARVIS_API_KEY";
+private static final String PREFS = "jarvis_secure";
+private static final String KEY_DATA = "encrypted_key";
+private static final String KEY_IV = "key_iv";
 
+private void saveApiKey(String value) throws Exception {
+    KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+    store.load(null);
+
+    if (!store.containsAlias(KEY_ALIAS)) {
+        KeyGenerator generator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+
+        generator.init(new KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build());
+
+        generator.generateKey();
+    }
+
+    SecretKey secret = (SecretKey) store.getKey(KEY_ALIAS, null);
+    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(Cipher.ENCRYPT_MODE, secret);
+
+    byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+
+    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putString(KEY_DATA, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .putString(KEY_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+            .apply();
+}
+
+private String loadApiKey() {
+    try {
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        String data = prefs.getString(KEY_DATA, null);
+        String iv = prefs.getString(KEY_IV, null);
+
+        if (data == null || iv == null) return "";
+
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+
+        SecretKey secret = (SecretKey) store.getKey(KEY_ALIAS, null);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+
+        cipher.init(Cipher.DECRYPT_MODE, secret,
+                new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)));
+
+        byte[] decrypted = cipher.doFinal(
+                Base64.decode(data, Base64.NO_WRAP));
+
+        return new String(decrypted, StandardCharsets.UTF_8);
+
+    } catch (Exception e) {
+        return "";
+    }
+}
     private final int BG = Color.rgb(8, 10, 18);
     private final int PANEL = Color.rgb(19, 23, 35);
     private final int RED = Color.rgb(255, 65, 55);
@@ -81,8 +150,16 @@ public class MainActivity extends Activity {
 
         buildInterface();
         addMessage("JARVIS", "Systems online. Good evening. How may I assist you?");
-        showKeyDialog();
-    }
+        apiKey = loadApiKey();
+
+if (apiKey.isEmpty()) {
+    showKeyDialog();
+
+
+} else {
+    status.setText("● READY • SAVED AI KEY");
+    status.setTextColor(GOLD);
+}
 
     private GradientDrawable shape(int color, int strokeColor) {
         GradientDrawable drawable = new GradientDrawable();
@@ -282,7 +359,7 @@ public class MainActivity extends Activity {
 
         new AlertDialog.Builder(this)
                 .setTitle("Connect JARVIS AI")
-                .setMessage("Enter your Groq API key. It will remain in memory only.")
+                .setMessage("Enter your Groq API key. It will be encrypted and saved on this device.")
                 .setView(box)
                 .setCancelable(true)
                 .setPositiveButton("CONNECT", (dialog, which) -> {
@@ -295,6 +372,13 @@ public class MainActivity extends Activity {
                     }
 
                     apiKey = entered;
+                    try {
+    saveApiKey(entered);
+} catch (Exception e) {
+    Toast.makeText(this,
+            "Could not securely save API key.",
+            Toast.LENGTH_LONG).show();
+}
                     status.setText("●  READY  •  AI KEY ADDED");
                     status.setTextColor(GOLD);
                     addMessage("JARVIS",
