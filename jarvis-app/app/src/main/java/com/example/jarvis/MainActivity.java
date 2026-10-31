@@ -1,3 +1,4 @@
+
 package com.example.jarvis;
 
 import android.Manifest;
@@ -13,8 +14,10 @@ import android.speech.RecognitionListener;
 import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.widget.*;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
+
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.io.*;
@@ -23,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
+
     TextView status, conversation;
     EditText message;
     TextToSpeech tts;
@@ -33,6 +37,7 @@ public class MainActivity extends Activity {
     @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
+
         getWindow().setStatusBarColor(Color.rgb(4,12,24));
         getWindow().setNavigationBarColor(Color.rgb(4,12,24));
 
@@ -62,7 +67,8 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(conversation);
-        root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        root.addView(scroll,
+            new LinearLayout.LayoutParams(-1,0,1));
 
         message = new EditText(this);
         message.setHint("Type your message");
@@ -94,15 +100,19 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         tts = new TextToSpeech(this, result -> {
-            if (result == TextToSpeech.SUCCESS)
+            if (result == TextToSpeech.SUCCESS) {
                 tts.setLanguage(Locale.getDefault());
+            }
         });
 
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(
-                new String[]{Manifest.permission.RECORD_AUDIO},101);
-        }    void showKeyDialog() {
+                new String[]{Manifest.permission.RECORD_AUDIO}, 101);
+        }
+    }
+
+    void showKeyDialog() {
         EditText input = new EditText(this);
         input.setHint("Paste your Groq API key");
         input.setSingleLine(true);
@@ -128,6 +138,7 @@ public class MainActivity extends Activity {
         message.setText("");
 
         String q = question.toLowerCase(Locale.ROOT);
+
         if (q.contains("bank") || q.contains("payment")
                 || q.contains("transfer")) {
             reply("I cannot perform banking, payments or transfers.");
@@ -159,14 +170,17 @@ public class MainActivity extends Activity {
 
     void askGroq(String question) {
         HttpURLConnection conn = null;
+
         try {
             URL url = new URL(
                 "https://api.groq.com/openai/v1/chat/completions");
+
             conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setConnectTimeout(20000);
             conn.setReadTimeout(30000);
             conn.setDoOutput(true);
+
             conn.setRequestProperty("Content-Type",
                 "application/json");
             conn.setRequestProperty("Authorization",
@@ -184,6 +198,7 @@ public class MainActivity extends Activity {
                 "Reply in the same language as the user. " +
                 "Use simple, clear language. " +
                 "Never perform banking, payments or money transfers.");
+
             messages.put(system);
 
             JSONObject user = new JSONObject();
@@ -198,23 +213,33 @@ public class MainActivity extends Activity {
             out.close();
 
             int code = conn.getResponseCode();
+
             InputStream stream = (code >= 200 && code < 300)
-                ? conn.getInputStream() : conn.getErrorStream();
+                ? conn.getInputStream()
+                : conn.getErrorStream();
 
             BufferedReader reader = new BufferedReader(
                 new InputStreamReader(stream, "UTF-8"));
+
             StringBuilder result = new StringBuilder();
             String line;
-            while ((line = reader.readLine()) != null)
+
+            while ((line = reader.readLine()) != null) {
                 result.append(line);
+            }
+
             reader.close();
 
-            if (code < 200 || code >= 300)
+            if (code < 200 || code >= 300) {
                 throw new Exception("Groq error " + code);
+            }
 
-            JSONObject response = new JSONObject(result.toString());
+            JSONObject response =
+                new JSONObject(result.toString());
+
             String answer = response.getJSONArray("choices")
-                .getJSONObject(0).getJSONObject("message")
+                .getJSONObject(0)
+                .getJSONObject("message")
                 .getString("content");
 
             runOnUiThread(() -> reply(answer));
@@ -223,15 +248,20 @@ public class MainActivity extends Activity {
             runOnUiThread(() ->
                 reply("I could not connect to AI. Check internet and API key."));
         } finally {
-            if (conn != null) conn.disconnect();
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
-    }
+
     void reply(String answer) {
         conversation.append("\n\nJARVIS: " + answer);
         status.setText("SYSTEM READY");
-        if (tts != null)
-            tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "jarvis");
+
+        if (tts != null) {
+            tts.speak(answer, TextToSpeech.QUEUE_FLUSH,
+                null, "jarvis");
+        }
     }
 
     void startListening() {
@@ -240,10 +270,14 @@ public class MainActivity extends Activity {
             return;
         }
 
-        if (recognizer != null) recognizer.destroy();
+        if (recognizer != null) {
+            recognizer.destroy();
+        }
+
         recognizer = SpeechRecognizer.createSpeechRecognizer(this);
 
         recognizer.setRecognitionListener(new RecognitionListener() {
+
             @Override
             public void onReadyForSpeech(Bundle params) {
                 status.setText("LISTENING...");
@@ -273,10 +307,12 @@ public class MainActivity extends Activity {
             public void onResults(Bundle results) {
                 ArrayList<String> words = results.getStringArrayList(
                     SpeechRecognizer.RESULTS_RECOGNITION);
+
                 if (words != null && !words.isEmpty()) {
                     message.setText(words.get(0));
                     sendMessage();
                 }
+
                 status.setText("SYSTEM READY");
             }
 
@@ -287,10 +323,15 @@ public class MainActivity extends Activity {
             public void onEvent(int eventType, Bundle params) {}
         });
 
-        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+        Intent intent = new Intent(
+            RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+
+        intent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
             RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,
+
+        intent.putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE,
             Locale.getDefault().toLanguageTag());
 
         recognizer.startListening(intent);
@@ -298,9 +339,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        if (recognizer != null) recognizer.destroy();
-        if (tts != null) tts.shutdown();
+        if (recognizer != null) {
+            recognizer.destroy();
+        }
+
+        if (tts != null) {
+            tts.shutdown();
+        }
+
         executor.shutdownNow();
         super.onDestroy();
     }
-}
+    }
