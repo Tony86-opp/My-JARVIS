@@ -231,8 +231,9 @@ public class MainActivity extends Activity {
             reader.close();
 
             if (code < 200 || code >= 300) {
-                throw new Exception("Groq error " + code);
-            }
+                throw new Exception("Groq error " + code + ": " + result);
+            
+       
 
             JSONObject response =
                 new JSONObject(result.toString());
