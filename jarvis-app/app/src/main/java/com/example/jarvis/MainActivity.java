@@ -244,11 +244,13 @@ public class MainActivity extends Activity {
 
             runOnUiThread(() -> reply(answer));
 
-        } catch (Exception e) {
+                } catch (Exception e) {
+            String error = e.getMessage();
             runOnUiThread(() ->
-                reply("I could not connect to AI. Check internet and API key."));
+                reply("AI connection failed: " +
+                    (error == null ? "Unknown error" : error)));
         } finally {
-            if (conn != null) {
+            if (coif (conn != null) {nn != null) {
                 conn.disconnect();
             }
         }
