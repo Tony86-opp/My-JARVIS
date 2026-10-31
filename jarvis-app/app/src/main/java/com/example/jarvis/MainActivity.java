@@ -250,7 +250,7 @@ public class MainActivity extends Activity {
                 reply("AI connection failed: " +
                     (error == null ? "Unknown error" : error)));
         } finally {
-            if (coif (conn != null) {nn != null) {
+            if (conn != null) {
                 conn.disconnect();
             }
         }
