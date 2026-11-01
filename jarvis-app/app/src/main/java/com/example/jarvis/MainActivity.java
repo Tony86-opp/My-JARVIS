@@ -23,6 +23,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -238,7 +239,13 @@ public class MainActivity extends Activity {
         header.setOrientation(LinearLayout.VERTICAL);
         header.setGravity(Gravity.CENTER);
         header.setPadding(0, dp(8), 0, dp(8));
+ImageView logo = new ImageView(this);
+logo.setImageResource(R.drawable.jarvis_logo);
+logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
+LinearLayout.LayoutParams logoParams =
+        new LinearLayout.LayoutParams(dp(110), dp(110));
+header.addView(logo, logoParams);
         TextView eyebrow = text(
                 "STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
         header.addView(eyebrow);
