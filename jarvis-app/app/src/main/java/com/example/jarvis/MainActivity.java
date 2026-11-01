@@ -592,7 +592,7 @@ public class MainActivity extends Activity {
                     new JSONObject(result.toString());
 
             String answer =
-                                    response.getJSONArray("choices")
+           response.getJSONArray("choices")
                             .getJSONObject(0)
                             .getJSONObject("message")
                             .getString("content");
