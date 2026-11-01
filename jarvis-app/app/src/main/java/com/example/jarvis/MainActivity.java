@@ -236,7 +236,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(BG);
 
         LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
+         header.setOrientation(LinearLayout.VERTICAL);
 header.setGravity(Gravity.CENTER);
 header.setPadding(0, dp(8), 0, dp(8));
 
@@ -252,7 +252,6 @@ header.addView(logo, logoParams);
 TextView eyebrow = text(
         "STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
 header.addView(eyebrow);
-
         TextView title = text("J.A.R.V.I.S.", 32, WHITE);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setLetterSpacing(0.12f);
