@@ -224,16 +224,22 @@ if (apiKey.isEmpty()) {
         corePanel.setBackground(shape(PANEL, RED));
 
         reactor = text("◉", 64, RED);
-        reactor.setTypeface(Typeface.DEFAULT_BOLD);
-        corePanel.addView(reactor);
+reactor.setVisibility(View.GONE);
 
-        TextView coreLabel = text("ARC REACTOR  //  CORE SYSTEM", 10, GOLD);
-        corePanel.addView(coreLabel);
+JarvisHudView hud = new JarvisHudView(this);
+corePanel.addView(hud,
+        new LinearLayout.LayoutParams(-1, dp(210)));
 
-        status = text("●  STANDBY  •  AI NOT CONNECTED", 11, MUTED);
-        status.setPadding(0, dp(8), 0, 0);
-        corePanel.addView(status);
+TextView coreLabel = text(
+        "ARC REACTOR  //  CORE SYSTEM", 10, GOLD);
+corePanel.addView(coreLabel);
 
+status = text(
+        "●  STANDBY  •  AI NOT CONNECTED", 11, MUTED);
+status.setPadding(0, dp(8), 0, 0);
+corePanel.addView(status);
+        
+        
         LinearLayout.LayoutParams coreParams =
                 new LinearLayout.LayoutParams(-1, dp(150));
         coreParams.bottomMargin = dp(12);
