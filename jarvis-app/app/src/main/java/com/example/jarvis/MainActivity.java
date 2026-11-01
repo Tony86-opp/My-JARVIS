@@ -737,8 +737,8 @@ header.addView(eyebrow);
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
 
             intent.putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE,
-                    Locale.getDefault());
+                   RecognizerIntent.EXTRA_LANGUAGE,
+                   Locale.getDefault().toString());
 
             intent.putExtra(
                     RecognizerIntent.EXTRA_PARTIAL_RESULTS,
