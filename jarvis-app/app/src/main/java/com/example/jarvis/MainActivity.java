@@ -239,13 +239,14 @@ public class MainActivity extends Activity {
         header.setOrientation(LinearLayout.VERTICAL);
         header.setGravity(Gravity.CENTER);
         header.setPadding(0, dp(8), 0, dp(8));
-ImageView logo = new ImageView(this);
-logo.setImageResource(R.drawable.jarvis_logo);
-logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.jarvis_logo);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
-LinearLayout.LayoutParams logoParams =
+        LinearLayout.LayoutParams logoParams =
         new LinearLayout.LayoutParams(dp(110), dp(110));
-header.addView(logo, logoParams);
+        header.addView(logo, logoParams);
         TextView eyebrow = text(
                 "STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
         header.addView(eyebrow);
