@@ -236,6 +236,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(BG);
 
         LinearLayout header = new LinearLayout(this);
+        
          header.setOrientation(LinearLayout.VERTICAL);
 header.setGravity(Gravity.CENTER);
 header.setPadding(0, dp(8), 0, dp(8));
