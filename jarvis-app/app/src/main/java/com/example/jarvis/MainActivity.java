@@ -1,8 +1,11 @@
+
 package com.example.jarvis;
 
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -11,10 +14,12 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.RecognitionListener;
 import android.speech.tts.TextToSpeech;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -32,82 +37,24 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import android.content.SharedPreferences;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.keystore.KeyProperties;
-import android.util.Base64;
-import java.security.KeyStore;
+
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
-public class MainActivity extends Activity { 
-private static final String KEY_ALIAS = "JARVIS_API_KEY";
-private static final String PREFS = "jarvis_secure";
-private static final String KEY_DATA = "encrypted_key";
-private static final String KEY_IV = "key_iv";
 
-private void saveApiKey(String value) throws Exception {
-    KeyStore store = KeyStore.getInstance("AndroidKeyStore");
-    store.load(null);
+public class MainActivity extends Activity {
 
-    if (!store.containsAlias(KEY_ALIAS)) {
-        KeyGenerator generator = KeyGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+    private static final String KEY_ALIAS = "JARVIS_API_KEY";
+    private static final String PREFS = "jarvis_secure";
+    private static final String KEY_DATA = "encrypted_key";
+    private static final String KEY_IV = "key_iv";
 
-        generator.init(new KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setRandomizedEncryptionRequired(true)
-                .build());
-
-        generator.generateKey();
-    }
-
-    SecretKey secret = (SecretKey) store.getKey(KEY_ALIAS, null);
-    Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-    cipher.init(Cipher.ENCRYPT_MODE, secret);
-
-    byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
-
-    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-            .putString(KEY_DATA, Base64.encodeToString(encrypted, Base64.NO_WRAP))
-            .putString(KEY_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
-            .apply();
-}
-
-private String loadApiKey() {
-    try {
-        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        String data = prefs.getString(KEY_DATA, null);
-        String iv = prefs.getString(KEY_IV, null);
-
-        if (data == null || iv == null) return "";
-
-        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
-        store.load(null);
-
-        SecretKey secret = (SecretKey) store.getKey(KEY_ALIAS, null);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-
-        cipher.init(Cipher.DECRYPT_MODE, secret,
-                new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)));
-
-        byte[] decrypted = cipher.doFinal(
-                Base64.decode(data, Base64.NO_WRAP));
-
-        return new String(decrypted, StandardCharsets.UTF_8);
-
-    } catch (Exception e) {
-        return "";
-    }
-}
     private final int BG = Color.rgb(8, 10, 18);
     private final int PANEL = Color.rgb(19, 23, 35);
     private final int RED = Color.rgb(255, 65, 55);
@@ -129,8 +76,89 @@ private String loadApiKey() {
     private String apiKey = "";
     private boolean ttsReady = false;
 
+    // ENCRYPT AND SAVE THE API KEY
+    private void saveApiKey(String value) throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+
+        if (!store.containsAlias(KEY_ALIAS)) {
+            KeyGenerator generator = KeyGenerator.getInstance(
+                    KeyProperties.KEY_ALGORITHM_AES,
+                    "AndroidKeyStore");
+
+            generator.init(new KeyGenParameterSpec.Builder(
+                    KEY_ALIAS,
+                    KeyProperties.PURPOSE_ENCRYPT
+                            | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(
+                            KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setRandomizedEncryptionRequired(true)
+                    .build());
+
+            generator.generateKey();
+        }
+
+        SecretKey secret =
+                (SecretKey) store.getKey(KEY_ALIAS, null);
+
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, secret);
+
+        byte[] encrypted =
+                cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(KEY_DATA,
+                        Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                .putString(KEY_IV,
+                        Base64.encodeToString(
+                                cipher.getIV(), Base64.NO_WRAP))
+                .apply();
+    }
+
+    // LOAD AND DECRYPT THE SAVED API KEY
+    private String loadApiKey() {
+        try {
+            SharedPreferences prefs =
+                    getSharedPreferences(PREFS, MODE_PRIVATE);
+
+            String data = prefs.getString(KEY_DATA, null);
+            String iv = prefs.getString(KEY_IV, null);
+
+            if (data == null || iv == null) {
+                return "";
+            }
+
+            KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+            store.load(null);
+
+            SecretKey secret =
+                    (SecretKey) store.getKey(KEY_ALIAS, null);
+
+            if (secret == null) {
+                return "";
+            }
+
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+
+            cipher.init(Cipher.DECRYPT_MODE, secret,
+                    new GCMParameterSpec(
+                            128, Base64.decode(iv, Base64.NO_WRAP)));
+
+            byte[] decrypted =
+                    cipher.doFinal(
+                            Base64.decode(data, Base64.NO_WRAP));
+
+            return new String(decrypted, StandardCharsets.UTF_8);
+
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         executor = Executors.newSingleThreadExecutor();
@@ -138,8 +166,11 @@ private String loadApiKey() {
         tts = new TextToSpeech(this, result -> {
             if (result == TextToSpeech.SUCCESS) {
                 int languageResult = tts.setLanguage(Locale.UK);
-                ttsReady = languageResult != TextToSpeech.LANG_MISSING_DATA
-                        && languageResult != TextToSpeech.LANG_NOT_SUPPORTED;
+
+                ttsReady =
+                        languageResult != TextToSpeech.LANG_MISSING_DATA
+                                && languageResult
+                                != TextToSpeech.LANG_NOT_SUPPORTED;
 
                 if (ttsReady) {
                     tts.setSpeechRate(0.88f);
@@ -149,16 +180,23 @@ private String loadApiKey() {
         });
 
         buildInterface();
-addMessage("JARVIS", "Systems online. Good evening. How may I assist you?");
 
-apiKey = loadApiKey();
+        addMessage("JARVIS",
+                "Systems online. Good evening, Sir. How may I assist you?");
 
-if (apiKey.isEmpty()) {
-    showKeyDialog();
-} else {
-    status.setText("● READY • SAVED AI KEY");
-    status.setTextColor(GOLD);
-}
+        apiKey = loadApiKey();
+
+        if (apiKey.isEmpty()) {
+            showKeyDialog();
+        } else {
+            status.setText("● READY • SAVED AI KEY");
+            status.setTextColor(GOLD);
+        }
+    }
+
+    private int dp(float value) {
+        return (int) (value *
+                getResources().getDisplayMetrics().density);
     }
 
     private GradientDrawable shape(int color, int strokeColor) {
@@ -167,10 +205,6 @@ if (apiKey.isEmpty()) {
         drawable.setCornerRadius(dp(16));
         drawable.setStroke(dp(1), strokeColor);
         return drawable;
-    }
-
-    private int dp(float value) {
-        return (int) (value * getResources().getDisplayMetrics().density);
     }
 
     private TextView text(String value, int size, int color) {
@@ -193,6 +227,7 @@ if (apiKey.isEmpty()) {
         return button;
     }
 
+    // MAIN JARVIS INTERFACE
     private void buildInterface() {
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -204,7 +239,8 @@ if (apiKey.isEmpty()) {
         header.setGravity(Gravity.CENTER);
         header.setPadding(0, dp(8), 0, dp(8));
 
-        TextView eyebrow = text("STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
+        TextView eyebrow = text(
+                "STARK INDUSTRIES  //  PERSONAL AI", 10, GOLD);
         header.addView(eyebrow);
 
         TextView title = text("J.A.R.V.I.S.", 32, WHITE);
@@ -212,11 +248,13 @@ if (apiKey.isEmpty()) {
         title.setLetterSpacing(0.12f);
         header.addView(title);
 
-        TextView subtitle = text("JUST A RATHER VERY INTELLIGENT SYSTEM", 9, MUTED);
+        TextView subtitle = text(
+                "JUST A RATHER VERY INTELLIGENT SYSTEM", 9, MUTED);
         header.addView(subtitle);
 
         root.addView(header);
 
+        // REACTOR PANEL
         LinearLayout corePanel = new LinearLayout(this);
         corePanel.setOrientation(LinearLayout.VERTICAL);
         corePanel.setGravity(Gravity.CENTER);
@@ -224,29 +262,31 @@ if (apiKey.isEmpty()) {
         corePanel.setBackground(shape(PANEL, RED));
 
         reactor = text("◉", 64, RED);
-reactor.setVisibility(View.GONE);
+        reactor.setVisibility(View.GONE);
 
-JarvisHudView hud = new JarvisHudView(this);
-corePanel.addView(hud,
-        new LinearLayout.LayoutParams(-1, dp(210)));
+        JarvisHudView hud = new JarvisHudView(this);
+        corePanel.addView(hud,
+                new LinearLayout.LayoutParams(-1, dp(210)));
 
-TextView coreLabel = text(
-        "ARC REACTOR  //  CORE SYSTEM", 10, GOLD);
-corePanel.addView(coreLabel);
+        TextView coreLabel = text(
+                "ARC REACTOR  //  CORE SYSTEM", 10, GOLD);
+        corePanel.addView(coreLabel);
 
-status = text(
-        "●  STANDBY  •  AI NOT CONNECTED", 11, MUTED);
-status.setPadding(0, dp(8), 0, 0);
-corePanel.addView(status);
-        
-        
+        status = text(
+                "●  STANDBY  •  AI NOT CONNECTED", 11, MUTED);
+        status.setPadding(0, dp(8), 0, 0);
+        corePanel.addView(status);
+
         LinearLayout.LayoutParams coreParams =
                 new LinearLayout.LayoutParams(-1, dp(300));
         coreParams.bottomMargin = dp(12);
         root.addView(corePanel, coreParams);
 
-        TextView logTitle = text("COMMUNICATION LOG", 11, GOLD);
-        logTitle.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        // COMMUNICATION LOG
+        TextView logTitle = text(
+                "COMMUNICATION LOG", 11, GOLD);
+        logTitle.setGravity(
+                Gravity.START | Gravity.CENTER_VERTICAL);
         logTitle.setPadding(dp(4), dp(4), 0, dp(8));
         root.addView(logTitle);
 
@@ -263,6 +303,7 @@ corePanel.addView(status);
                 new LinearLayout.LayoutParams(-1, 0, 1f);
         root.addView(scroll, scrollParams);
 
+        // MESSAGE INPUT
         input = new EditText(this);
         input.setSingleLine(false);
         input.setMinLines(1);
@@ -272,13 +313,15 @@ corePanel.addView(status);
         input.setHint("Ask JARVIS anything...");
         input.setTextSize(15);
         input.setPadding(dp(14), dp(12), dp(14), dp(12));
-        input.setBackground(shape(PANEL, Color.rgb(65, 75, 95)));
+        input.setBackground(
+                shape(PANEL, Color.rgb(65, 75, 95)));
 
         LinearLayout.LayoutParams inputParams =
                 new LinearLayout.LayoutParams(-1, -2);
         inputParams.topMargin = dp(10);
         root.addView(input, inputParams);
 
+        // CONTROL BUTTONS
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -286,7 +329,8 @@ corePanel.addView(status);
         Button talk = makeButton("🎙 TALK", GOLD);
         Button connect = makeButton("AI KEY", GOLD);
 
-        row.addView(send, new LinearLayout.LayoutParams(0, dp(52), 1f));
+        row.addView(send,
+                new LinearLayout.LayoutParams(0, dp(52), 1f));
 
         LinearLayout.LayoutParams talkParams =
                 new LinearLayout.LayoutParams(0, dp(52), 1f);
@@ -310,6 +354,7 @@ corePanel.addView(status);
 
         send.setOnClickListener(v -> {
             String question = input.getText().toString().trim();
+
             if (!question.isEmpty()) {
                 input.setText("");
                 hideKeyboard();
@@ -324,9 +369,12 @@ corePanel.addView(status);
     private void hideKeyboard() {
         try {
             InputMethodManager manager =
-                    (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (manager != null) {
-                manager.hideSoftInputFromWindow(input.getWindowToken(), 0);
+                    (InputMethodManager) getSystemService(
+                            Context.INPUT_METHOD_SERVICE);
+
+            if (manager != null && input != null) {
+                manager.hideSoftInputFromWindow(
+                        input.getWindowToken(), 0);
             }
         } catch (Exception ignored) {
         }
@@ -339,6 +387,7 @@ corePanel.addView(status);
         bubble.setTextColor(WHITE);
         bubble.setGravity(Gravity.START);
         bubble.setPadding(dp(13), dp(10), dp(13), dp(10));
+
         bubble.setBackground(shape(
                 who.equals("YOU")
                         ? Color.rgb(35, 24, 29)
@@ -348,11 +397,14 @@ corePanel.addView(status);
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(-1, -2);
         params.bottomMargin = dp(9);
+
         chat.addView(bubble, params);
 
-        scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+        scroll.post(() ->
+                scroll.fullScroll(View.FOCUS_DOWN));
     }
 
+    // GROQ API KEY DIALOG
     private void showKeyDialog() {
         EditText keyInput = new EditText(this);
         keyInput.setSingleLine(true);
@@ -361,77 +413,102 @@ corePanel.addView(status);
 
         LinearLayout box = new LinearLayout(this);
         box.setPadding(dp(20), dp(8), dp(20), dp(4));
-        box.addView(keyInput, new LinearLayout.LayoutParams(-1, -2));
+        box.addView(keyInput,
+                new LinearLayout.LayoutParams(-1, -2));
 
         new AlertDialog.Builder(this)
                 .setTitle("Connect JARVIS AI")
-                .setMessage("Enter your Groq API key. It will be encrypted and saved on this device.")
+                .setMessage(
+                        "Enter your Groq API key. " +
+                        "It will be encrypted and saved on this device.")
                 .setView(box)
                 .setCancelable(true)
                 .setPositiveButton("CONNECT", (dialog, which) -> {
-                    String entered = keyInput.getText().toString().trim();
+                    String entered =
+                            keyInput.getText().toString().trim();
 
                     if (entered.isEmpty()) {
                         Toast.makeText(this,
-                                "No API key entered.", Toast.LENGTH_SHORT).show();
+                                "No API key entered.",
+                                Toast.LENGTH_SHORT).show();
                         return;
                     }
 
-                    apiKey = entered;
                     try {
-    saveApiKey(entered);
-} catch (Exception e) {
-    Toast.makeText(this,
-            "Could not securely save API key.",
-            Toast.LENGTH_LONG).show();
-}
-                    status.setText("●  READY  •  AI KEY ADDED");
-                    status.setTextColor(GOLD);
-                    addMessage("JARVIS",
-                            "API key entered. I will test the connection when you send a message.");
+                        saveApiKey(entered);
+                        apiKey = entered;
+
+                        status.setText(
+                                "● READY • AI KEY SAVED");
+                        status.setTextColor(GOLD);
+
+                        addMessage("JARVIS",
+                                "Your AI key has been securely saved. " +
+                                "I will test the connection when you send a message.");
+
+                    } catch (Exception e) {
+                        apiKey = "";
+
+                        Toast.makeText(this,
+                                "Could not securely save API key.",
+                                Toast.LENGTH_LONG).show();
+                    }
                 })
                 .setNegativeButton("LATER", (dialog, which) -> {
-                    status.setText("●  OFFLINE MODE  •  AI NOT CONNECTED");
+                    status.setText(
+                            "● OFFLINE MODE • AI NOT CONNECTED");
                 })
                 .show();
     }
 
+    // PROCESS USER MESSAGE
     private void sendMessage(String question) {
         addMessage("YOU", question);
 
-        String lower = question.toLowerCase(Locale.ROOT);
+        String lower =
+                question.toLowerCase(Locale.ROOT);
 
-        if (lower.matches(".*\\b(bank|banking|payment|payments|money transfer|transfer money|upi|pay someone)\\b.*")) {
-            reply("That capability is disabled, as requested. I cannot help perform banking, payments, or money transfers.");
+        // PERMANENT BANKING AND PAYMENT RESTRICTION
+        if (lower.matches(
+                ".*\\b(bank|banking|payment|payments|money transfer|transfer money|upi|pay someone)\\b.*")) {
+
+            reply("That capability is disabled, as requested. " +
+                    "I cannot help perform banking, payments, " +
+                    "or money transfers.");
             return;
         }
 
         if (lower.contains("what time") || lower.equals("time")) {
             reply("The current time is " +
                     java.text.DateFormat.getTimeInstance(
-                            java.text.DateFormat.SHORT).format(new java.util.Date()));
+                            java.text.DateFormat.SHORT)
+                            .format(new java.util.Date()));
             return;
         }
 
-        if (lower.contains("what date") || lower.contains("today's date")) {
+        if (lower.contains("what date")
+                || lower.contains("today's date")) {
             reply("Today's date is " +
                     java.text.DateFormat.getDateInstance(
-                            java.text.DateFormat.LONG).format(new java.util.Date()));
+                            java.text.DateFormat.LONG)
+                            .format(new java.util.Date()));
             return;
         }
 
         if (apiKey.isEmpty()) {
-            reply("My AI connection is not configured yet. Tap AI KEY and enter your Groq API key.");
+            reply("My AI connection is not configured yet. " +
+                    "Tap AI KEY and enter your Groq API key.");
             return;
         }
 
-        status.setText("●  THINKING  •  CONNECTING TO GROQ");
+        status.setText("● THINKING • CONNECTING TO GROQ");
         status.setTextColor(GOLD);
         reactor.setTextColor(GOLD);
 
         executor.execute(() -> askGroq(question));
     }
 
+    // CONNECT TO GROQ AI
     private void askGroq(String question) {
         HttpURLConnection conn = null;
 
@@ -445,8 +522,10 @@ corePanel.addView(status);
             conn.setReadTimeout(30000);
             conn.setDoOutput(true);
 
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty(
+                    "Content-Type", "application/json");
+            conn.setRequestProperty(
+                    "Authorization", "Bearer " + apiKey);
 
             JSONObject body = new JSONObject();
             body.put("model", "openai/gpt-oss-120b");
@@ -458,10 +537,12 @@ corePanel.addView(status);
             JSONObject system = new JSONObject();
             system.put("role", "system");
             system.put("content",
-                    "You are JARVIS, a helpful, calm, intelligent voice assistant. " +
-                    "Reply in the same language as the user. " +
+                    "You are JARVIS, a helpful, calm, intelligent " +
+                    "personal voice assistant. Address the user as Sir " +
+                    "when natural. Reply in the same language as the user. " +
                     "Use clear, natural, concise language. " +
-                    "Never perform or facilitate banking, payments, or money transfers.");
+                    "Never perform or facilitate banking, payments, " +
+                    "UPI transactions, or money transfers.");
             messages.put(system);
 
             JSONObject user = new JSONObject();
@@ -471,7 +552,8 @@ corePanel.addView(status);
 
             body.put("messages", messages);
 
-            byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+            byte[] bytes =
+                    body.toString().getBytes(StandardCharsets.UTF_8);
 
             try (OutputStream out = conn.getOutputStream()) {
                 out.write(bytes);
@@ -479,16 +561,22 @@ corePanel.addView(status);
 
             int code = conn.getResponseCode();
 
-            InputStream stream = (code >= 200 && code < 300)
-                    ? conn.getInputStream()
-                    : conn.getErrorStream();
+            InputStream stream =
+                    (code >= 200 && code < 300)
+                            ? conn.getInputStream()
+                            : conn.getErrorStream();
 
             StringBuilder result = new StringBuilder();
 
             if (stream != null) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                try (BufferedReader reader =
+                             new BufferedReader(
+                                     new InputStreamReader(
+                                             stream,
+                                             StandardCharsets.UTF_8))) {
+
                     String line;
+
                     while ((line = reader.readLine()) != null) {
                         result.append(line);
                     }
@@ -496,18 +584,21 @@ corePanel.addView(status);
             }
 
             if (code < 200 || code >= 300) {
-                throw new Exception("Groq error " + code + ": " + result);
+                throw new Exception(
+                        "Groq error " + code + ": " + result);
             }
 
-            JSONObject response = new JSONObject(result.toString());
+            JSONObject response =
+                    new JSONObject(result.toString());
 
-            String answer = response.getJSONArray("choices")
-                    .getJSONObject(0)
-                    .getJSONObject("message")
-                    .getString("content");
+            String answer =
+                                    response.getJSONArray("choices")
+                            .getJSONObject(0)
+                            .getJSONObject("message")
+                            .getString("content");
 
             runOnUiThread(() -> {
-                status.setText("●  ONLINE  •  JARVIS READY");
+                status.setText("● ONLINE • JARVIS READY");
                 status.setTextColor(GOLD);
                 reactor.setTextColor(RED);
                 reply(answer);
@@ -515,6 +606,7 @@ corePanel.addView(status);
 
         } catch (Exception e) {
             String error = e.getMessage();
+
             if (error == null || error.isEmpty()) {
                 error = e.getClass().getSimpleName();
             }
@@ -522,7 +614,7 @@ corePanel.addView(status);
             final String message = error;
 
             runOnUiThread(() -> {
-                status.setText("●  CONNECTION ERROR");
+                status.setText("● CONNECTION ERROR");
                 status.setTextColor(RED);
                 reactor.setTextColor(RED);
                 reply("AI connection failed: " + message);
@@ -535,14 +627,20 @@ corePanel.addView(status);
         }
     }
 
+    // DISPLAY AND SPEAK RESPONSE
     private void reply(String answer) {
         addMessage("JARVIS", answer);
 
         if (tts != null && ttsReady) {
-            tts.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "JARVIS_REPLY");
+            tts.speak(
+                    answer,
+                    TextToSpeech.QUEUE_FLUSH,
+                    null,
+                    "JARVIS_REPLY");
         }
     }
 
+    // VOICE INPUT
     private void startListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             Toast.makeText(this,
@@ -556,12 +654,15 @@ corePanel.addView(status);
                 recognizer.destroy();
             }
 
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer =
+                    SpeechRecognizer.createSpeechRecognizer(this);
 
-            recognizer.setRecognitionListener(new RecognitionListener() {
+            recognizer.setRecognitionListener(
+                    new RecognitionListener() {
+
                 @Override
                 public void onReadyForSpeech(Bundle params) {
-                    status.setText("●  LISTENING  •  SPEAK NOW");
+                    status.setText("● LISTENING • SPEAK NOW");
                     status.setTextColor(GOLD);
                 }
 
@@ -579,12 +680,13 @@ corePanel.addView(status);
 
                 @Override
                 public void onEndOfSpeech() {
-                    status.setText("●  PROCESSING VOICE");
+                    status.setText("● PROCESSING VOICE");
                 }
 
                 @Override
                 public void onError(int error) {
-                    status.setText("●  STANDBY");
+                    status.setText("● STANDBY");
+
                     Toast.makeText(MainActivity.this,
                             "Couldn't recognize speech. Please try again.",
                             Toast.LENGTH_SHORT).show();
@@ -596,12 +698,13 @@ corePanel.addView(status);
                             results.getStringArrayList(
                                     SpeechRecognizer.RESULTS_RECOGNITION);
 
-                    status.setText("●  STANDBY");
+                    status.setText("● STANDBY");
 
                     if (matches != null && !matches.isEmpty()) {
-                        input.setText(matches.get(0));
-                        sendMessage(matches.get(0));
+                        String spoken = matches.get(0);
+                        input.setText(spoken);
                         input.setText("");
+                        sendMessage(spoken);
                     }
                 }
 
@@ -610,16 +713,25 @@ corePanel.addView(status);
                 }
 
                 @Override
-                public void onEvent(int eventType, Bundle params) {
+                public void onEvent(
+                        int eventType, Bundle params) {
                 }
             });
 
             Intent intent = new Intent(
                     RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                     RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
-            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE,
+                    Locale.getDefault());
+
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_PARTIAL_RESULTS,
+                    false);
 
             recognizer.startListening(intent);
 
@@ -630,6 +742,7 @@ corePanel.addView(status);
         }
     }
 
+    // CLEAN UP WHEN APP CLOSES
     @Override
     protected void onDestroy() {
         if (recognizer != null) {
@@ -649,4 +762,5 @@ corePanel.addView(status);
 
         super.onDestroy();
     }
-                }
+}
+   
