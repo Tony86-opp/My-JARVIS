@@ -241,7 +241,7 @@ corePanel.addView(status);
         
         
         LinearLayout.LayoutParams coreParams =
-                new LinearLayout.LayoutParams(-1, dp(150));
+                new LinearLayout.LayoutParams(-1, dp(300));
         coreParams.bottomMargin = dp(12);
         root.addView(corePanel, coreParams);
 
