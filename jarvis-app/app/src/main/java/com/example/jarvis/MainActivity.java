@@ -164,20 +164,21 @@ public class MainActivity extends Activity {
 
         executor = Executors.newSingleThreadExecutor();
 
-        tts = new TextToSpeech(this, result -> {
-            if (result == TextToSpeech.SUCCESS) {
-                int languageResult = tts.setLanguage(Locale.UK);
+tts = new TextToSpeech(this, result -> {
+    if (result == TextToSpeech.SUCCESS) {
+        int languageResult = tts.setLanguage(Locale.UK);
 
-                ttsReady =
-                        languageResult != TextToSpeech.LANG_MISSING_DATA
-                                && languageResult
-                                != TextToSpeech.LANG_NOT_SUPPORTED;
+        ttsReady =
+                languageResult != TextToSpeech.LANG_MISSING_DATA
+                        && languageResult
+                        != TextToSpeech.LANG_NOT_SUPPORTED;
 
-                if (ttsReady) {
-                    tts.setSpeechRate(1.0f);
-                    tts.setPitch(0.95f);
-                }
-                });
+        if (ttsReady) {
+            tts.setSpeechRate(1.0f);
+            tts.setPitch(0.95f);
+        }
+    }
+});
                     
                 
             
