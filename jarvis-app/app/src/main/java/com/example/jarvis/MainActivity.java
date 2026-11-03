@@ -174,10 +174,10 @@ public class MainActivity extends Activity {
                                 != TextToSpeech.LANG_NOT_SUPPORTED;
 
                 if (ttsReady) {
-    tts.setSpeechRate(1.0f);
-    tts.setPitch(0.95f);
-}
-});
+                    tts.setSpeechRate(1.0f);
+                    tts.setPitch(0.95f);
+                }
+                });
                     
                 
             
