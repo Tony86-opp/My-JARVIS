@@ -643,17 +643,26 @@ header.addView(eyebrow);
     }
 
     // DISPLAY AND SPEAK RESPONSE
-    private void reply(String answer) {
-        addMessage("JARVIS", answer);
+private void reply(String answer) {
+    addMessage("JARVIS", answer);
 
-        if (tts != null && ttsReady) {
-            tts.speak(
-                    answer,
-                    TextToSpeech.QUEUE_FLUSH,
-                    null,
-                    "JARVIS_REPLY");
-        }
+    if (tts != null && ttsReady) {
+        String spokenText = answer
+                .replaceAll("```[\\s\\S]*?```", " ")
+                .replaceAll("`([^`]*)`", "$1")
+                .replaceAll("[*_#~]", "")
+                .replaceAll("[—–-]+", ", ")
+                .replaceAll("[\\[\\]{}<>]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        tts.speak(
+                spokenText,
+                TextToSpeech.QUEUE_FLUSH,
+                null,
+                "JARVIS_REPLY");
     }
+}
 
     // VOICE INPUT
     private void startListening() {
